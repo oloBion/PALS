@@ -16,6 +16,7 @@ from .common import NUM_RESAMPLES, PLAGE_WEIGHT, HG_WEIGHT, is_comparison_used, 
 from .preprocessing import MinValueImputation, RowAverageImputation, LogNormalisation, ZScoreNormalisation, \
     ZeroAndNegativeReplace
 
+import streamlit as st
 
 class PLAGE(Method):
 
@@ -129,6 +130,9 @@ class PLAGE(Method):
             tvalues = self._calculate_t_values(activity_df, comparison_samples[0], comparison_samples[1])
             pvalues = self._compare_resamples(tvalues, null_max_tvalues, null_min_tvalues)
             all_pvalues.append(pvalues)
+            fc2 = self._calculate_fold_change(activity_df, comparison_samples[0], comparison_samples[1])
+            all_pvalues.append(fc2)
+            column_names.append(comp['name'] + ' fc2')
 
         t_test_list = map(list, zip(*all_pvalues))
         t_test = pd.DataFrame(t_test_list).set_index([0])
@@ -168,6 +172,9 @@ class PLAGE(Method):
                 c2 = activity_df.loc[pathway, condition_2].values
                 path_params.append(list(ttest_ind(c1, c2))[1])
                 column_names.append(comp['name'] + ' p-value')
+                fc2 = np.log2(np.abs(c1.mean(axis=1) / c2.mean(axis=1)))
+                path_params.append(fc2)
+                column_names.append(comp['name'] + ' fc2')
             t_test_list.append(path_params)
 
         t_test = pd.DataFrame(t_test_list).set_index([0])
@@ -278,13 +285,13 @@ class PLAGE(Method):
         :return: a DF with Pathway names (rows) and the SVD activity levels for the samples (columns)
         """
         pathways = self.data_source.dataset_pathways
-
         # For all of the pathways get all of the peak IDs
         pathway_activities = []
         pw_names = []
         for pw in pathways:
             row_ids = self.data_source.dataset_pathways_to_row_ids[pw]
             pathway_data = measurement_df.loc[row_ids]  # DF selected from peak IDs.
+             # print(pathway_data)
             try:
                 w, d, c = np.linalg.svd(np.array(pathway_data))
             except np.linalg.LinAlgError:
@@ -298,7 +305,6 @@ class PLAGE(Method):
             pw_names.append(pw_name)
             pw_act_list.extend(list(c[0]))
             pathway_activities.append(pw_act_list)
-
         activity_df = pd.DataFrame(pathway_activities).set_index([0])
         activity_df.columns = measurement_df.columns
         activity_df.index.name = "Pathway ids"
@@ -331,7 +337,6 @@ class PLAGE(Method):
         se_total = np.sqrt(var1 / n1 + var2 / n2)
         se_total[se_total == 0.0] = np.nan
         tvalues = (m1 - m2) / se_total
-
         return tvalues
 
     def _compare_resamples(self, tvalues, null_max_tvalues, null_min_tvalues):
@@ -345,3 +350,14 @@ class PLAGE(Method):
                 pvalue = np.nan
             pvalues.append(pvalue)
         return pvalues
+
+    def _calculate_fold_change(self, activity_df, condition_1, condition_2):
+
+        c1 = activity_df.loc[:, condition_1]
+        c2 = activity_df.loc[:, condition_2]
+
+        fc = np.abs(c1.mean(axis=1) / c2.mean(axis=1))
+
+        fc2 = np.log2(fc)
+
+        return fc2.values
