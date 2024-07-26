@@ -88,7 +88,6 @@ class PLAGE(Method):
         variance = np.round(measurement_df.values.std(axis=1))
         logger.debug("Mean values of the rows in the DF is %s" % str(mean))
         logger.debug("Variance in the rows of the DF is %s" % str(variance))
-
         activity_df = self._calculate_pathway_activity_df(measurement_df)
         return activity_df
 
@@ -130,9 +129,6 @@ class PLAGE(Method):
             tvalues = self._calculate_t_values(activity_df, comparison_samples[0], comparison_samples[1])
             pvalues = self._compare_resamples(tvalues, null_max_tvalues, null_min_tvalues)
             all_pvalues.append(pvalues)
-            fc2 = self._calculate_fold_change(activity_df, comparison_samples[0], comparison_samples[1])
-            all_pvalues.append(fc2)
-            column_names.append(comp['name'] + ' fc2')
 
         t_test_list = map(list, zip(*all_pvalues))
         t_test = pd.DataFrame(t_test_list).set_index([0])
@@ -156,28 +152,24 @@ class PLAGE(Method):
         Formula coverage for a dataset
         """
         logger.info("Calculating plage p-values")
-        t_test_list = []
-        for pathway, row in activity_df.iterrows():
-            name = row[0]
-            path_params = [pathway, name]
-            column_names = ['pw_name']
-            for comp in self.data_source.comparisons:
-                if not is_comparison_used(comp, self.case, self.control):
-                    continue
+        all_pvalues = [activity_df.index, activity_df['pw name']]
+        column_names = ['pw_name']
 
-                comparison_samples = self.data_source.get_comparison_samples(comp)
-                condition_1 = comparison_samples[0]
-                condition_2 = comparison_samples[1]
-                c1 = activity_df.loc[pathway, condition_1].values
-                c2 = activity_df.loc[pathway, condition_2].values
-                path_params.append(list(ttest_ind(c1, c2))[1])
-                column_names.append(comp['name'] + ' p-value')
-                fc2 = np.log2(np.abs(c1.mean(axis=1) / c2.mean(axis=1)))
-                path_params.append(fc2)
-                column_names.append(comp['name'] + ' fc2')
-            t_test_list.append(path_params)
+        for comp in self.data_source.comparisons:
+            if not is_comparison_used(comp, self.case, self.control):
+                continue
 
-        t_test = pd.DataFrame(t_test_list).set_index([0])
+            comparison_samples = self.data_source.get_comparison_samples(comp)
+            condition_1 = comparison_samples[0]
+            condition_2 = comparison_samples[1]
+            c1 = activity_df.loc[:, condition_1]
+            c2 = activity_df.loc[:, condition_2]
+            pvalues = ttest_ind(c1, c2, axis=1)
+            all_pvalues.append(pvalues.pvalue)
+            column_names.append(comp['name'] + ' p-value')
+
+        t_test = map(list, zip(*all_pvalues))
+        t_test = pd.DataFrame(t_test).set_index([0])
         t_test.columns = column_names
         t_test.index.name = 'mapids'
         t_test_filled = t_test.fillna(1.0)
@@ -291,14 +283,12 @@ class PLAGE(Method):
         for pw in pathways:
             row_ids = self.data_source.dataset_pathways_to_row_ids[pw]
             pathway_data = measurement_df.loc[row_ids]  # DF selected from peak IDs.
-             # print(pathway_data)
             try:
                 w, d, c = np.linalg.svd(np.array(pathway_data))
             except np.linalg.LinAlgError:
                 # if it failed the first time, try again, it might magically work the second time
                 # see https://stackoverflow.com/questions/63761366/numpy-linalg-linalgerror-svd-did-not-converge-in-linear-least-squares-on-first
                 w, d, c = np.linalg.svd(np.array(pathway_data))
-
             pw_name = self.data_source.pathway_dict[pw]['display_name']
             pw_act_list = []
             pw_act_list.append(pw)
@@ -350,14 +340,3 @@ class PLAGE(Method):
                 pvalue = np.nan
             pvalues.append(pvalue)
         return pvalues
-
-    def _calculate_fold_change(self, activity_df, condition_1, condition_2):
-
-        c1 = activity_df.loc[:, condition_1]
-        c2 = activity_df.loc[:, condition_2]
-
-        fc = np.abs(c1.mean(axis=1) / c2.mean(axis=1))
-
-        fc2 = np.log2(fc)
-
-        return fc2.values
