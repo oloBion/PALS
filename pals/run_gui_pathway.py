@@ -111,7 +111,7 @@ def show_pathway_widgets(intensity_csv, annotation_csv):
     return parameters
 
 
-@st.cache
+@st.cache_data(ttl='15m')
 def run_pathway_analysis(params):
     # construct a data source from all the user parameters
     ds = get_data_source(params['annotation_df'], params['database_name'], params['experimental_design'],
@@ -151,30 +151,30 @@ def run_pathway_analysis(params):
     return results
 
 
-@st.cache(suppress_st_warning=True)
-def pathway_analysis_plage(ds):
+@st.cache_data(ttl='15m')
+def pathway_analysis_plage(_ds):
     my_bar = st.progress(0)
-    method = PLAGE(ds)
+    method = PLAGE(_ds)
     df = method.get_results()
     my_bar.empty()
     return df
 
 
-@st.cache
+@st.cache_data(ttl='15m')
 def pathway_analysis_ora(ds):
     method = ORA(ds)
     df = method.get_results()
     return df
 
 
-@st.cache
+@st.cache_data(ttl='15m')
 def pathway_analysis_gsea(ds):
     method = GSEA(ds)
     df = method.get_results()
     return df
 
 
-@st.cache
+@st.cache_data(ttl='15m')
 def get_data_source(annotation_df, database_name, experimental_design, int_df, min_replace,
                     reactome_metabolic_pathway_only, reactome_query, reactome_species):
     ds = DataSource(int_df, annotation_df, experimental_design, database_name,
@@ -184,9 +184,9 @@ def get_data_source(annotation_df, database_name, experimental_design, int_df, m
     return ds
 
 
-@st.cache
-def get_plot_data(pathway_ds, case, control):
-    experimental_design = pathway_ds.get_experimental_design()
+@st.cache_data(ttl='15m')
+def get_plot_data(_pathway_ds, case, control):
+    experimental_design = _pathway_ds.get_experimental_design()
     all_samples = []
     all_groups = []
     for group in experimental_design['groups']:
@@ -194,15 +194,15 @@ def get_plot_data(pathway_ds, case, control):
             samples = experimental_design['groups'][group]
             all_samples.extend(samples)
             all_groups.extend([group] * len(samples))
-    entity_dict = pathway_ds.entity_dict
-    intensities_df = pathway_ds.standardize_intensity_df()
-    dataset_pathways_to_row_ids = pathway_ds.dataset_pathways_to_row_ids
-    dataset_row_id_to_unique_ids = pathway_ds.dataset_row_id_to_unique_ids
+    entity_dict = _pathway_ds.entity_dict
+    intensities_df = _pathway_ds.standardize_intensity_df()
+    dataset_pathways_to_row_ids = _pathway_ds.dataset_pathways_to_row_ids
+    dataset_row_id_to_unique_ids = _pathway_ds.dataset_row_id_to_unique_ids
     return all_groups, all_samples, entity_dict, intensities_df, dataset_pathways_to_row_ids, \
            dataset_row_id_to_unique_ids
 
 
-@st.cache
+@st.cache_data(ttl='15m')
 def process_pathway_results(df, significant_column):
     # filter results to show only the columns we want
     try:
@@ -297,15 +297,20 @@ def show_pathway_results(df, use_reactome, results, verbose_output):
             plot_heatmap(all_groups, all_samples, intensities_df, members, dataset_row_id_to_unique_ids)
 
 
-@st.cache
-def send_expression_data(ds, case, control, species):
+@st.cache_data(ttl='15m')
+def send_expression_data(_ds, case, control, species):
     # send expression data to reactome for diagram exporter
-    int_df = ds.change_zero_peak_ints()
-    annot_df = ds.get_annotations()
-    design = ds.get_experimental_design()
+    int_df = _ds.change_zero_peak_ints()
+    st.write(int_df)
+    annot_df = _ds.get_annotations()
+    st.write(annot_df)
+    design = _ds.get_experimental_design()
+    st.write(design)
 
     case_cols = design['groups'][case]
+    st.write(case_cols)
     control_cols = design['groups'][control]
+    st.write(control_cols)
 
     df = annot_df.join(int_df).set_index('entity_id').sort_index()
     case_df = np.log2(df[case_cols])
@@ -315,7 +320,7 @@ def send_expression_data(ds, case, control, species):
     # for each compound, compute the average fold changes if there are multiple values
     # TODO: we need a better way to do this
     temp = defaultdict(list)
-    for idx, lfc in lfcs.iteritems():
+    for idx, lfc in lfcs.items():
         temp[idx].append(lfc)
 
     fold_changes = {}
@@ -341,7 +346,7 @@ def send_expression_data(ds, case, control, species):
         return None
 
 
-@st.cache
+@st.cache_data(ttl='15m')
 def get_reactome_info(stId):
     # refer to https://reactome.org/dev/content-service
     url = 'https://reactome.org/ContentService/data/query/%s' % stId
@@ -359,7 +364,7 @@ def get_reactome_info(stId):
     return status_code, json_response
 
 
-@st.cache
+@st.cache_data(ttl='15m')
 def send_reactome_expression_data(data, encoded_species):
     # refer to https://reactome.org/AnalysisService/#/identifiers/getPostTextUsingPOST
     url = 'https://reactome.org/AnalysisService/identifiers/?interactors=false&species=' + encoded_species + \
@@ -419,7 +424,7 @@ def show_kegg_diagram(df, pw_name, stId):
     st.image(image_url, use_column_width=True)
 
 
-@st.cache
+@st.cache_data(ttl='15m')
 def get_kegg_info(stId):
     k = KEGG()
     data = k.get(stId)

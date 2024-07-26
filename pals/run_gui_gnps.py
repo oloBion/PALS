@@ -55,7 +55,7 @@ def show_gnps_widgets(gnps_url, ms2lda_url, metadata_csv, peak_table_csv):
     return parameters
 
 
-@st.cache
+@st.cache_data(ttl='15m')
 def run_analysis(params):
     # unpack parameters
     case = params['case']
@@ -97,7 +97,7 @@ def run_analysis(params):
     return results
 
 
-@st.cache(suppress_st_warning=True)
+@st.cache_data(ttl='15m')
 def get_data(gnps_url, ms2lda_url, metadata_df, comparisons, peak_table_df):
     if ms2lda_url is not None and len(ms2lda_url) > 0:
         database_name = DATABASE_GNPS_MS2LDA
@@ -110,7 +110,7 @@ def get_data(gnps_url, ms2lda_url, metadata_df, comparisons, peak_table_df):
     return database
 
 
-@st.cache
+@st.cache_data(ttl='15m')
 def to_data_source(database):
     measurement_df = database.extra_data['measurement_df']
     annotation_df = database.extra_data['annotation_df']
@@ -119,7 +119,7 @@ def to_data_source(database):
     return ds
 
 
-@st.cache(suppress_st_warning=True)
+@st.cache_data(ttl='15m')
 def PLAGE_decomposition(ds):
     my_bar = st.progress(0)
     method = PLAGE(ds)
@@ -128,7 +128,7 @@ def PLAGE_decomposition(ds):
     return df
 
 
-@st.cache
+@st.cache_data(ttl='15m')
 def get_plot_data(gnps_ds, case, control):
     experimental_design = gnps_ds.get_experimental_design()
     all_samples = []
@@ -144,7 +144,7 @@ def get_plot_data(gnps_ds, case, control):
     return all_groups, all_samples, entity_dict, intensities_df, dataset_pathways_to_row_ids
 
 
-@st.cache
+@st.cache_data(ttl='15m')
 def process_gnps_results(df, significant_column):
     # filter results to show only the columns we want
     try:
