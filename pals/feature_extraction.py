@@ -331,6 +331,31 @@ class DataSource(object):
             measurement_df.loc[:, samples] = subset_df.mask(subset_df.isnull(), subset_df.mean(axis=1), axis=0)
         return measurement_df
 
+    def missing_values_replacement(self):
+        """
+        A method to change a 'zero' entries in a dataframe.
+        If all intensities in a (factor) group are zero, a min value is set.
+        If there are > 1 and < number in group zero intensities, then the average of the non_zeros entries is calculated
+        and used. Assuming the PiMP mzXML file names are unique
+        :param measurement_df: A dataframe of peak intensities with peak ids (rows) and samples (columns)
+        :return: No return, modifies peak_int_df.
+        """
+        # Get the min_intensity value set for the analysis
+        logger.debug("Setting the zero intensity values in the dataframe")
+        measurement_df = self.get_measurements()
+        logger.debug(np.sum(np.sum(measurement_df < 0)))
+
+        # replace 0s with NaNs and build a mask of null values
+        measurement_df = measurement_df.astype(float)
+        measurement_df = measurement_df.replace(0.0, np.nan)
+        mask = measurement_df.isna()
+
+        for group_name, samples in self.groups.items():
+            replacement_value = 0.1 * measurement_df.loc[:, samples].min(axis=1)
+            measurement_df = measurement_df.mask(mask, mask.mul(replacement_value, axis=0))
+
+        return measurement_df
+
     def _calculate_coverage_df(self, mapids):
         """
         Calculate the Formula coverage for a dataset.
@@ -362,8 +387,8 @@ class DataSource(object):
         :param entity_id: the unique id
         :return: either the unique id if available, or the original entity id otherwise
         """
-        if 'unique_id' in self.entity_dict[entity_id]:
-            unique_id = self.entity_dict[entity_id]['unique_id']
+        if 'inchikey' in self.entity_dict[entity_id]:
+            unique_id = self.entity_dict[entity_id]['inchikey']
         else:
             unique_id = entity_id
         return unique_id
@@ -375,6 +400,7 @@ class DataSource(object):
         """
         all_entity_ids = set(self.entity_dict.keys())  # all entity ids in database
         pathway_entity_ids = set(self.mapping_dict.keys())  # all entity ids found in pathways
+
         entity_ids_in_pathways = all_entity_ids.intersection(pathway_entity_ids)
         pathway_unique_ids = set([self._get_unique_id(entity_id) for entity_id in entity_ids_in_pathways])
         return pathway_unique_ids
