@@ -65,7 +65,7 @@ class PLAGE(Method):
         :param preprocess: whether to preprocess data
         :return: a dataframe containing pathway analysis results from PALS
         """
-        activity_df = self.get_plage_activity_df(preprocess)
+        activity_df, metabolites = self.get_plage_activity_df(preprocess)
         if resample:
             with warnings.catch_warnings():
                 # FIXME: not sure if this is the best thing to do
@@ -74,7 +74,7 @@ class PLAGE(Method):
         else:
             plage_df = self.set_up_plage_p_df(activity_df)
         pathway_df = self.calculate_hg_values(plage_df)
-        return pathway_df
+        return pathway_df, metabolites
 
     def get_plage_activity_df(self, preprocess):
         """
@@ -88,8 +88,8 @@ class PLAGE(Method):
         variance = np.round(measurement_df.values.std(axis=1))
         logger.debug("Mean values of the rows in the DF is %s" % str(mean))
         logger.debug("Variance in the rows of the DF is %s" % str(variance))
-        activity_df = self._calculate_pathway_activity_df(measurement_df)
-        return activity_df
+        activity_df, metabolites = self._calculate_pathway_activity_df(measurement_df)
+        return activity_df, metabolites
 
     def set_up_resample_plage_p_df(self, activity_df, streamlit_pbar=None):
         """
@@ -280,6 +280,7 @@ class PLAGE(Method):
         # For all of the pathways get all of the peak IDs
         pathway_activities = []
         pw_names = []
+        metabolites_ids = {}
         for pw in pathways:
             row_ids = self.data_source.dataset_pathways_to_row_ids[pw]
             pathway_data = measurement_df.loc[row_ids]  # DF selected from peak IDs.
@@ -295,11 +296,15 @@ class PLAGE(Method):
             pw_names.append(pw_name)
             pw_act_list.extend(list(c[0]))
             pathway_activities.append(pw_act_list)
+            metabolites_ids[pw] = {}
+            metabolites_ids[pw]["name"] = pw_name
+            metabolites_ids[pw]["met_id"] = row_ids
         activity_df = pd.DataFrame(pathway_activities).set_index([0])
         activity_df.columns = measurement_df.columns
         activity_df.index.name = "Pathway ids"
         activity_df.insert(0, 'pw name', pw_names)
-        return activity_df
+        metabolites_ids = pd.DataFrame(metabolites_ids).T
+        return activity_df, metabolites_ids
 
     def _permute_two_lists(self, list1, list2):
         l = list(list1) + list(list2)
